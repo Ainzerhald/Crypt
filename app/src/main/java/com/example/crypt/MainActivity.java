@@ -1,12 +1,8 @@
 package com.example.crypt;
 
 import android.Manifest;
-import android.annotation.SuppressLint;
 import android.content.ContentResolver;
-import android.content.Context;
 import android.content.Intent;
-import android.content.pm.PackageManager;
-import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
@@ -14,34 +10,23 @@ import android.os.ParcelFileDescriptor;
 import android.util.Log;
 import android.view.View;
 import android.webkit.MimeTypeMap;
-import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.RadioButton;
-import android.widget.RadioGroup;
-import android.widget.TextView;
 import android.widget.Toast;
 
-import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
 
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
-import java.io.File;
 import java.io.FileDescriptor;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.nio.charset.Charset;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.LocalTime;
+import java.util.Date;
 
 @RequiresApi(api = Build.VERSION_CODES.O)
 public class MainActivity extends AppCompatActivity {
@@ -52,6 +37,7 @@ public class MainActivity extends AppCompatActivity {
     byte[] buffer;
     String dir = Environment.getExternalStorageDirectory().getAbsolutePath() + "/CRYPT/";
     int file = 0;
+    String type;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -80,7 +66,7 @@ public class MainActivity extends AppCompatActivity {
             FileDescriptor fd = uri.getFileDescriptor();//Получение дескриптора файла
             ContentResolver cR = getContentResolver();
             MimeTypeMap mime = MimeTypeMap.getSingleton();
-            String type = mime.getExtensionFromMimeType(cR.getType(data.getData()));//Получение расширение файла
+            type = mime.getExtensionFromMimeType(cR.getType(data.getData()));//Получение расширение файла
             FileInputStream input = new FileInputStream(fd);
             buffer = new byte[input.available()];
             try {
@@ -99,11 +85,25 @@ public class MainActivity extends AppCompatActivity {
 
     public void execute(View view) throws IOException {
         EditText key = findViewById(R.id.key);
-        if(!key.getText().toString().equals("")){
-            if(key.getText().length() > 5){
+        key.getText().toString().toUpperCase();
+        if(!key.equals("")){
+            if(key.length() > 5){
                 if(file != 0){
-                    FileOutputStream asd = new FileOutputStream(dir + "sda.txt");
-                    asd.write(buffer, 0, buffer.length);//Переписать шифровку или дешировку с условием выбора пользователя
+                    String file_name = "";
+                    Date date = new Date();
+                    file_name += String.valueOf(date.getTime());
+                    RadioButton check = findViewById(R.id.crypt);
+                    if(check.isChecked()){
+                        buffer = crypt(buffer, key.getText().toString().toUpperCase());
+                        file_name += "(crypt).";
+                    }
+                    else{
+                        buffer = decrypt(buffer, key.getText().toString().toUpperCase());
+                        file_name += "(decrypt).";
+                    }
+                    FileOutputStream fout = new FileOutputStream(dir + file_name + type);
+                    fout.write(buffer, 0, buffer.length);
+                    Toast.makeText(this, "Операция выполнена", Toast.LENGTH_SHORT).show();
                 }
                 else{
                     Toast.makeText(this, "Выберите файл", Toast.LENGTH_SHORT).show();
@@ -116,5 +116,29 @@ public class MainActivity extends AppCompatActivity {
         else{
             Toast.makeText(this, "Введите ключ", Toast.LENGTH_SHORT).show();
         }
+    }
+
+    protected byte[] crypt(byte[] buf, String key){
+        int control = 0;
+        for(int i = 0; i < buffer.length; i++) {
+            if(control == key.length()) {
+                control = 0;
+            }
+            buffer[i] = (byte) (buffer[i] + new String(symbol).indexOf(key.charAt(control)));
+            control++;
+        }
+        return buf;
+    }
+
+    protected byte[] decrypt(byte[] buf, String key){
+        int control = 0;
+        for(int i = 0; i < buffer.length; i++) {
+            if(control == key.length()) {
+                control = 0;
+            }
+            buffer[i] = (byte) (buffer[i] - new String(symbol).indexOf(key.charAt(control)));
+            control++;
+        }
+        return buf;
     }
 }
