@@ -7,7 +7,6 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.ParcelFileDescriptor;
-import android.util.Log;
 import android.view.View;
 import android.webkit.MimeTypeMap;
 import android.widget.EditText;
@@ -25,15 +24,11 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.time.LocalTime;
 import java.util.Date;
 
 @RequiresApi(api = Build.VERSION_CODES.O)
 public class MainActivity extends AppCompatActivity {
 
-    static char[] symbol = {' ', 'А', 'Б', 'В', 'Г', 'Д', 'Е', 'Ё', 'Ж', 'З', 'И', 'Й', 'К',
-            'Л', 'М', 'Н', 'О', 'П', 'Р', 'С', 'Т', 'У', 'Ф', 'Х', 'Ц', 'Ч', 'Ш', 'Щ', 'Ъ',
-            'Ы', 'Ь', 'Э', 'Ю', 'Я', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9'}; // Алфавит для ключа
     byte[] buffer;
     String dir = Environment.getExternalStorageDirectory().getAbsolutePath() + "/CRYPT/";
     int file = 0;
@@ -83,9 +78,11 @@ public class MainActivity extends AppCompatActivity {
         file = 1;
     }
 
+    byte[] symbol;
+
     public void execute(View view) throws IOException {
         EditText key = findViewById(R.id.key);
-        key.getText().toString().toUpperCase();
+        symbol = key.getText().toString().getBytes();
         if(!key.equals("")){
             if(key.length() > 5){
                 if(file != 0){
@@ -103,6 +100,11 @@ public class MainActivity extends AppCompatActivity {
                     }
                     FileOutputStream fout = new FileOutputStream(dir + file_name + type);
                     fout.write(buffer, 0, buffer.length);
+                    fout.close();
+                    buffer = null;
+                    symbol = null;
+                    key.setText(null);
+                    file = 0;
                     Toast.makeText(this, "Операция выполнена", Toast.LENGTH_SHORT).show();
                 }
                 else{
@@ -124,7 +126,7 @@ public class MainActivity extends AppCompatActivity {
             if(control == key.length()) {
                 control = 0;
             }
-            buffer[i] = (byte) (buffer[i] + new String(symbol).indexOf(key.charAt(control)));
+            buffer[i] = (byte) (buffer[i] + symbol[control]);
             control++;
         }
         return buf;
@@ -136,7 +138,7 @@ public class MainActivity extends AppCompatActivity {
             if(control == key.length()) {
                 control = 0;
             }
-            buffer[i] = (byte) (buffer[i] - new String(symbol).indexOf(key.charAt(control)));
+            buffer[i] = (byte) (buffer[i] - symbol[control]);
             control++;
         }
         return buf;
