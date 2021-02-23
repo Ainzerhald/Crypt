@@ -3,6 +3,7 @@ package com.example.crypt;
 import android.Manifest;
 import android.content.ContentResolver;
 import android.content.Intent;
+import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
@@ -10,6 +11,7 @@ import android.os.ParcelFileDescriptor;
 import android.view.View;
 import android.webkit.MimeTypeMap;
 import android.widget.EditText;
+import android.widget.ProgressBar;
 import android.widget.RadioButton;
 import android.widget.Toast;
 
@@ -27,7 +29,7 @@ import java.nio.file.Paths;
 import java.util.Date;
 
 @RequiresApi(api = Build.VERSION_CODES.O)
-public class MainActivity extends AppCompatActivity {
+public class Main extends AppCompatActivity {
 
     byte[] buffer;
     String dir = Environment.getExternalStorageDirectory().getAbsolutePath() + "/CRYPT/";
@@ -37,7 +39,27 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
+        setContentView(R.layout.main);
+        ProgressBar bar = findViewById(R.id.progressBar);
+        new AsyncTask<Void, Void, Void>(){
+
+            @Override
+            protected Void doInBackground(Void... voids) {
+                new Authorization().Authorization("", "", 0, "");
+                return null;
+            }
+
+            protected void onPreExecute() {
+                super.onPreExecute();
+                bar.setVisibility(View.VISIBLE);
+            }
+
+            protected void onPostExecute(Void aVoid) {
+                super.onPostExecute(aVoid);
+                bar.setVisibility(View.INVISIBLE);
+            }
+        }.execute();
+        ActivityCompat.requestPermissions(this, new String[] {Manifest.permission.WRITE_EXTERNAL_STORAGE}, 2);//Запрос на доступ к файлам
         if(!Files.exists(Paths.get(dir))){//Создание папки CRYPT в случае его отсутствия
             try {
                 Files.createDirectories(Paths.get(dir));
@@ -45,7 +67,6 @@ public class MainActivity extends AppCompatActivity {
                 e.printStackTrace();
             }
         }
-        ActivityCompat.requestPermissions(this, new String[] {Manifest.permission.WRITE_EXTERNAL_STORAGE}, 2);//Запрос на доступ к файлам
     }
 
     public void open(View view){
@@ -63,10 +84,12 @@ public class MainActivity extends AppCompatActivity {
             MimeTypeMap mime = MimeTypeMap.getSingleton();
             type = mime.getExtensionFromMimeType(cR.getType(data.getData()));//Получение расширение файла
             FileInputStream input = new FileInputStream(fd);
+            buffer = null;
             buffer = new byte[input.available()];
             try {
                 input.read(buffer, 0, buffer.length);//Получение массива байт кода файла
                 input.close();
+                file = 1;
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -75,7 +98,6 @@ public class MainActivity extends AppCompatActivity {
         } catch (IOException e) {
             e.printStackTrace();
         }
-        file = 1;
     }
 
     byte[] symbol;
@@ -83,7 +105,7 @@ public class MainActivity extends AppCompatActivity {
     public void execute(View view) throws IOException {
         EditText key = findViewById(R.id.key);
         symbol = key.getText().toString().getBytes();
-        if(!key.equals("")){
+        if(!key.getText().toString().equals("")){
             if(key.length() > 5){
                 if(file != 0){
                     String file_name = "";
@@ -143,4 +165,5 @@ public class MainActivity extends AppCompatActivity {
         }
         return buf;
     }
+
 }
