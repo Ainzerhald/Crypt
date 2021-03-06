@@ -14,10 +14,14 @@ import android.webkit.MimeTypeMap;
 import android.widget.EditText;
 import android.widget.ProgressBar;
 import android.widget.RadioButton;
+import android.widget.TextView;
 import android.widget.Toast;
 import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
+
+import org.w3c.dom.Text;
+
 import java.io.FileDescriptor;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -40,8 +44,8 @@ public class Main extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.main);
 
-        ActivityCompat.requestPermissions(this, new String[] {Manifest.permission.WRITE_EXTERNAL_STORAGE}, 2);//Запрос на доступ к файлам
-        if(!Files.exists(Paths.get(dir))){//Создание папки CRYPT в случае его отсутствия
+        ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, 2);//Запрос на доступ к файлам
+        if (!Files.exists(Paths.get(dir))) {//Создание папки CRYPT в случае его отсутствия
             try {
                 Files.createDirectories(Paths.get(dir));
             } catch (IOException e) {
@@ -50,7 +54,7 @@ public class Main extends AppCompatActivity {
         }
     }
 
-    public void open(View view){
+    public void open(View view) {
         Intent file = new Intent(Intent.ACTION_GET_CONTENT);//Выбор файла
         file.setType("*/*");
         startActivityForResult(file, 1);
@@ -58,7 +62,7 @@ public class Main extends AppCompatActivity {
 
     FileDescriptor fd = null;
 
-    public void onActivityResult (int requestCode, int resultCode, Intent data ) {
+    public void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         try {
             ParcelFileDescriptor uri = getContentResolver().openFileDescriptor(data.getData(), "r");
@@ -67,9 +71,9 @@ public class Main extends AppCompatActivity {
             MimeTypeMap mime = MimeTypeMap.getSingleton();
             type = mime.getExtensionFromMimeType(cR.getType(data.getData()));//Получение расширение файла
             file = 1;
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     protected byte[] symbol;
@@ -77,41 +81,39 @@ public class Main extends AppCompatActivity {
     public void execute(View view) {
         EditText key = findViewById(R.id.key);
         symbol = key.getText().toString().getBytes();
-        if(!key.getText().toString().equals("")){
-            if(key.length() > 5){
-                if(file != 0){
+        if (!key.getText().toString().equals("")) {
+            if (key.length() > 5) {
+                if (file != 0) {
                     RadioButton check = findViewById(R.id.crypt);
-                    if(check.isChecked()){
+                    if (check.isChecked()) {
                         crypt(key.getText().toString());
-                    }
-                    else{
+                    } else {
                         decrypt(key.getText().toString());
                     }
-                }
-                else{
+                } else {
                     Toast.makeText(this, "Выберите файл", Toast.LENGTH_SHORT).show();
                 }
-            }
-            else{
+            } else {
                 Toast.makeText(this, "Ключ должен быть не менее 6 символов", Toast.LENGTH_SHORT).show();
             }
-        }
-        else{
+        } else {
             Toast.makeText(this, "Введите ключ", Toast.LENGTH_SHORT).show();
         }
     }
 
-    protected void crypt(String key){
+    protected void crypt(String key) {
         process(key, true);
     }
 
-    protected void decrypt(String key){
+    protected void decrypt(String key) {
         process(key, false);
     }
 
+    @SuppressLint("StaticFieldLeak")
     public void process(String key, boolean crypt) {
+
         ProgressBar bar = findViewById(R.id.progressBar);
-        new AsyncTask<Void, Void, Void>(){
+        new AsyncTask<Void, Double, Void>(){
 
             @SuppressLint("StaticFieldLeak")
             @Override
@@ -146,10 +148,12 @@ public class Main extends AppCompatActivity {
                         control = true;
                         dop = size;
                     }
+                    int metr = input.available();
                     buffer = new byte[bit];
                     for(int i = 0; i < check; i++) {
                         input.read(buffer, 0, buffer.length);
                         for(int g = 0; g < buffer.length; g++) {
+                            publishProgress((double) (((i * bit + g) / metr) * 100));
                             if(key_len == key.length()){
                                 key_len = 0;
                             }
@@ -162,6 +166,7 @@ public class Main extends AppCompatActivity {
                         buffer = new byte[dop];
                         input.read(buffer, 0, buffer.length);
                         for(int i = 0; i < buffer.length; i++){
+                            publishProgress((double) (((check * bit + i) / metr) * 100));
                             if(key_len == key.length()){
                                 key_len = 0;
                             }
@@ -170,11 +175,18 @@ public class Main extends AppCompatActivity {
                         out.write(buffer, 0, buffer.length);
                         input.close();
                         out.close();
+                        publishProgress((double) (100));
                     }
                 } catch (IOException e2) {
                     e2.printStackTrace();
                 }
                 return null;
+            }
+
+            protected void onProgressUpdate(Double... values) {
+                super.onProgressUpdate(values);
+                TextView progress = findViewById(R.id.progress);
+                progress.setText(values[0] + "%");
             }
 
             protected void onPreExecute() {
@@ -187,6 +199,7 @@ public class Main extends AppCompatActivity {
                 bar.setVisibility(View.INVISIBLE);
             }
         }.execute();
+
     }
 
 }
