@@ -153,18 +153,18 @@ public class Main extends AppCompatActivity {
                         dop = size;
                     }
                     buffer = new byte[bit];
-                    boolean error = false;
+                    boolean error;
                     for(int i = 0; i < check; i++) {
                         error = true;
                         while(error) {
                             try {
-                                input[0] = new FileInputStream(fd);
                                 input[0].read(buffer, 0, buffer.length);
                                 error = false;
                             } catch (IOException e) {
                                 error = true;
                                 input[0].close();
                                 fd = uri.getFileDescriptor();
+                                input[0] = new FileInputStream(fd);
                                 e.printStackTrace();
                             }
                         }
@@ -183,13 +183,13 @@ public class Main extends AppCompatActivity {
                         error = true;
                         while(error) {
                             try {
-                                input[0] = new FileInputStream(fd);
                                 input[0].read(buffer, 0, buffer.length);
                                 error = false;
                             } catch (IOException e) {
                                 error = true;
                                 input[0].close();
                                 fd = uri.getFileDescriptor();
+                                input[0] = new FileInputStream(fd);
                                 e.printStackTrace();
                             }
                         }
@@ -200,7 +200,6 @@ public class Main extends AppCompatActivity {
                             //buffer[i] = (byte) (buffer[i] + t * symbol[key_len]);
                         }
                         finalOut.write(buffer, 0, buffer.length);
-                        Log.i("Progress", "i = " + check + " check = " + check + " result = " + (int)((double) check / check * 100));
                         input[0].close();
                         finalOut.close();
                         publishProgress( 100);
