@@ -9,6 +9,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.ParcelFileDescriptor;
+import android.util.Log;
 import android.view.View;
 import android.webkit.MimeTypeMap;
 import android.widget.EditText;
@@ -61,11 +62,12 @@ public class Main extends AppCompatActivity {
     }
 
     FileDescriptor fd = null;
+    ParcelFileDescriptor uri = null;
 
     public void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         try {
-            ParcelFileDescriptor uri = getContentResolver().openFileDescriptor(data.getData(), "r");
+            uri = getContentResolver().openFileDescriptor(data.getData(), "r");
             fd = uri.getFileDescriptor();//Получение дескриптора файла
             ContentResolver cR = getContentResolver();
             MimeTypeMap mime = MimeTypeMap.getSingleton();
@@ -113,30 +115,32 @@ public class Main extends AppCompatActivity {
     public void process(String key, boolean crypt) {
 
         ProgressBar bar = findViewById(R.id.progressBar);
-        new AsyncTask<Void, Double, Void>(){
+        final FileInputStream[] input = {new FileInputStream(fd)};
+        FileOutputStream out = null;
+        String file_name = "";
+        Date date = new Date();
+        file_name += date.getTime();
+        try {
+            out = new FileOutputStream(dir + file_name + "." + type);
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        }
+        FileOutputStream finalOut = out;
+        new AsyncTask<Void, Integer, Void>(){
 
             @SuppressLint("StaticFieldLeak")
             @Override
             protected Void doInBackground(Void... voids) {
-                String file_name = "";
-                Date date = new Date();
-                file_name += date.getTime();
-                FileInputStream input = new FileInputStream(fd);
-                FileOutputStream out = null;
-                try {
-                    out = new FileOutputStream(dir + file_name + "." + type);
-                } catch (FileNotFoundException e) {
-                    e.printStackTrace();
-                }
                 int t = -1;
                 if(crypt){
                     t = 1;
                 }
-                int bit = 1024;
+                int bit = 1024
+                        ;
                 int key_len = 0;
                 symbol = key.getBytes();
                 try {
-                    int size = input.available();
+                    int size = input[0].available();
                     int check = 0;
                     while(size > bit) {
                         size -= bit;
@@ -148,34 +152,58 @@ public class Main extends AppCompatActivity {
                         control = true;
                         dop = size;
                     }
-                    int metr = input.available();
                     buffer = new byte[bit];
+                    boolean error = false;
                     for(int i = 0; i < check; i++) {
-                        input.read(buffer, 0, buffer.length);
+                        error = true;
+                        while(error) {
+                            try {
+                                input[0] = new FileInputStream(fd);
+                                input[0].read(buffer, 0, buffer.length);
+                                error = false;
+                            } catch (IOException e) {
+                                error = true;
+                                input[0].close();
+                                fd = uri.getFileDescriptor();
+                                e.printStackTrace();
+                            }
+                        }
+                        publishProgress( (int)((double) i / check * 100));
                         for(int g = 0; g < buffer.length; g++) {
-                            publishProgress((double) (((i * bit + g) / metr) * 100));
                             if(key_len == key.length()){
                                 key_len = 0;
                             }
-                            buffer[g] = (byte) (buffer[g] + t * symbol[key_len]);
+                            //buffer[g] = (byte) (buffer[g] + t * symbol[key_len]);
                             key_len++;
                         }
-                        out.write(buffer, 0, buffer.length);
+                        finalOut.write(buffer, 0, buffer.length);
                     }
                     if(control) {
                         buffer = new byte[dop];
-                        input.read(buffer, 0, buffer.length);
+                        error = true;
+                        while(error) {
+                            try {
+                                input[0] = new FileInputStream(fd);
+                                input[0].read(buffer, 0, buffer.length);
+                                error = false;
+                            } catch (IOException e) {
+                                error = true;
+                                input[0].close();
+                                fd = uri.getFileDescriptor();
+                                e.printStackTrace();
+                            }
+                        }
                         for(int i = 0; i < buffer.length; i++){
-                            publishProgress((double) (((check * bit + i) / metr) * 100));
                             if(key_len == key.length()){
                                 key_len = 0;
                             }
-                            buffer[i] = (byte) (buffer[i] + t * symbol[key_len]);
+                            //buffer[i] = (byte) (buffer[i] + t * symbol[key_len]);
                         }
-                        out.write(buffer, 0, buffer.length);
-                        input.close();
-                        out.close();
-                        publishProgress((double) (100));
+                        finalOut.write(buffer, 0, buffer.length);
+                        Log.i("Progress", "i = " + check + " check = " + check + " result = " + (int)((double) check / check * 100));
+                        input[0].close();
+                        finalOut.close();
+                        publishProgress( 100);
                     }
                 } catch (IOException e2) {
                     e2.printStackTrace();
@@ -183,7 +211,7 @@ public class Main extends AppCompatActivity {
                 return null;
             }
 
-            protected void onProgressUpdate(Double... values) {
+            protected void onProgressUpdate(Integer... values) {
                 super.onProgressUpdate(values);
                 TextView progress = findViewById(R.id.progress);
                 progress.setText(values[0] + "%");
