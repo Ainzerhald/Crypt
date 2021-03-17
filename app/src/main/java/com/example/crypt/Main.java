@@ -4,11 +4,13 @@ import android.Manifest;
 import android.annotation.SuppressLint;
 import android.content.ContentResolver;
 import android.content.Intent;
+import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.ParcelFileDescriptor;
+import android.text.Layout;
 import android.util.Log;
 import android.view.View;
 import android.webkit.MimeTypeMap;
@@ -17,6 +19,8 @@ import android.widget.ProgressBar;
 import android.widget.RadioButton;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.widget.VideoView;
+
 import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
@@ -44,7 +48,6 @@ public class Main extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.main);
-
         ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, 2);//Запрос на доступ к файлам
         if (!Files.exists(Paths.get(dir))) {//Создание папки CRYPT в случае его отсутствия
             try {
@@ -79,8 +82,13 @@ public class Main extends AppCompatActivity {
     }
 
     protected byte[] symbol;
+    boolean activ = false;
 
     public void execute(View view) {
+        if(activ){
+            Toast.makeText(this, "Дождитесь завершения предыдущего процесса", Toast.LENGTH_SHORT).show();
+            return;
+        }
         EditText key = findViewById(R.id.key);
         symbol = key.getText().toString().getBytes();
         if (!key.getText().toString().equals("")) {
@@ -114,12 +122,19 @@ public class Main extends AppCompatActivity {
     @SuppressLint("StaticFieldLeak")
     public void process(String key, boolean crypt) {
 
+        View relative = findViewById(R.id.relative);
         ProgressBar bar = findViewById(R.id.progressBar);
         final FileInputStream[] input = {new FileInputStream(fd)};
         FileOutputStream out = null;
         String file_name = "";
         Date date = new Date();
         file_name += date.getTime();
+        if(crypt){
+            file_name += "(crypt)";
+        }
+        else{
+            file_name += "(decrypt)";
+        }
         try {
             out = new FileOutputStream(dir + file_name + "." + type);
         } catch (FileNotFoundException e) {
@@ -135,8 +150,7 @@ public class Main extends AppCompatActivity {
                 if(crypt){
                     t = 1;
                 }
-                int bit = 1024
-                        ;
+                int bit = 1024;
                 int key_len = 0;
                 symbol = key.getBytes();
                 try {
@@ -173,7 +187,7 @@ public class Main extends AppCompatActivity {
                             if(key_len == key.length()){
                                 key_len = 0;
                             }
-                            //buffer[g] = (byte) (buffer[g] + t * symbol[key_len]);
+                            buffer[g] = (byte) (buffer[g] + t * symbol[key_len]);
                             key_len++;
                         }
                         finalOut.write(buffer, 0, buffer.length);
@@ -197,7 +211,7 @@ public class Main extends AppCompatActivity {
                             if(key_len == key.length()){
                                 key_len = 0;
                             }
-                            //buffer[i] = (byte) (buffer[i] + t * symbol[key_len]);
+                            buffer[i] = (byte) (buffer[i] + t * symbol[key_len]);
                         }
                         finalOut.write(buffer, 0, buffer.length);
                         input[0].close();
@@ -212,18 +226,20 @@ public class Main extends AppCompatActivity {
 
             protected void onProgressUpdate(Integer... values) {
                 super.onProgressUpdate(values);
-                TextView progress = findViewById(R.id.progress);
-                progress.setText(values[0] + "%");
+                bar.setProgress(values[0]);
             }
 
             protected void onPreExecute() {
                 super.onPreExecute();
-                bar.setVisibility(View.VISIBLE);
+                relative.setVisibility(View.VISIBLE);
+                activ = true;
             }
 
             protected void onPostExecute(Void aVoid) {
                 super.onPostExecute(aVoid);
-                bar.setVisibility(View.INVISIBLE);
+                relative.setVisibility(View.INVISIBLE);
+                activ = false;
+                file = 0;
             }
         }.execute();
 
