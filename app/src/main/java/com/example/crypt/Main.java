@@ -4,28 +4,20 @@ import android.Manifest;
 import android.annotation.SuppressLint;
 import android.content.ContentResolver;
 import android.content.Intent;
-import android.net.Uri;
-import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.ParcelFileDescriptor;
-import android.text.Layout;
-import android.util.Log;
 import android.view.View;
 import android.webkit.MimeTypeMap;
 import android.widget.EditText;
 import android.widget.ProgressBar;
 import android.widget.RadioButton;
-import android.widget.TextView;
 import android.widget.Toast;
-import android.widget.VideoView;
 
 import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
-
-import org.w3c.dom.Text;
 
 import java.io.FileDescriptor;
 import java.io.FileInputStream;
@@ -121,7 +113,6 @@ public class Main extends AppCompatActivity {
 
     @SuppressLint("StaticFieldLeak")
     public void process(String key, boolean crypt) {
-
         View relative = findViewById(R.id.relative);
         ProgressBar bar = findViewById(R.id.progressBar);
         final FileInputStream[] input = {new FileInputStream(fd)};
@@ -141,107 +132,89 @@ public class Main extends AppCompatActivity {
             e.printStackTrace();
         }
         FileOutputStream finalOut = out;
-        new AsyncTask<Void, Integer, Void>(){
-
-            @SuppressLint("StaticFieldLeak")
-            @Override
-            protected Void doInBackground(Void... voids) {
-                int t = -1;
-                if(crypt){
-                    t = 1;
+        relative.setVisibility(View.VISIBLE);
+        activ = true;
+        Thread thread = new Thread(() -> {
+            int t = -1;
+            if(crypt){
+                t = 1;
+            }
+            int bit = 1024;
+            int key_len = 0;
+            symbol = key.getBytes();
+            try {
+                int size = input[0].available();
+                int check = 0;
+                while(size > bit) {
+                    size -= bit;
+                    check++;
                 }
-                int bit = 1024;
-                int key_len = 0;
-                symbol = key.getBytes();
-                try {
-                    int size = input[0].available();
-                    int check = 0;
-                    while(size > bit) {
-                        size -= bit;
-                        check++;
-                    }
-                    boolean control = false;
-                    int dop = 0;
-                    if(size != 0) {
-                        control = true;
-                        dop = size;
-                    }
-                    buffer = new byte[bit];
-                    boolean error;
-                    for(int i = 0; i < check; i++) {
-                        error = true;
-                        while(error) {
-                            try {
-                                input[0].read(buffer, 0, buffer.length);
-                                error = false;
-                            } catch (IOException e) {
-                                error = true;
-                                input[0].close();
-                                fd = uri.getFileDescriptor();
-                                input[0] = new FileInputStream(fd);
-                                e.printStackTrace();
-                            }
-                        }
-                        publishProgress( (int)((double) i / check * 100));
-                        for(int g = 0; g < buffer.length; g++) {
-                            if(key_len == key.length()){
-                                key_len = 0;
-                            }
-                            buffer[g] = (byte) (buffer[g] + t * symbol[key_len]);
-                            key_len++;
-                        }
-                        finalOut.write(buffer, 0, buffer.length);
-                    }
-                    if(control) {
-                        buffer = new byte[dop];
-                        error = true;
-                        while(error) {
-                            try {
-                                input[0].read(buffer, 0, buffer.length);
-                                error = false;
-                            } catch (IOException e) {
-                                error = true;
-                                input[0].close();
-                                fd = uri.getFileDescriptor();
-                                input[0] = new FileInputStream(fd);
-                                e.printStackTrace();
-                            }
-                        }
-                        for(int i = 0; i < buffer.length; i++){
-                            if(key_len == key.length()){
-                                key_len = 0;
-                            }
-                            buffer[i] = (byte) (buffer[i] + t * symbol[key_len]);
-                        }
-                        finalOut.write(buffer, 0, buffer.length);
-                        input[0].close();
-                        finalOut.close();
-                        publishProgress( 100);
-                    }
-                } catch (IOException e2) {
-                    e2.printStackTrace();
+                boolean control = false;
+                int dop = 0;
+                if(size != 0) {
+                    control = true;
+                    dop = size;
                 }
-                return null;
+                buffer = new byte[bit];
+                boolean error;
+                for(int i = 0; i < check; i++) {
+                    bar.setProgress((int)((double)i / check * 100));
+                    error = true;
+                    while(error) {
+                        try {
+                            input[0].read(buffer, 0, buffer.length);
+                            error = false;
+                        } catch (IOException e) {
+                            error = true;
+                            input[0].close();
+                            fd = uri.getFileDescriptor();
+                            input[0] = new FileInputStream(fd);
+                            e.printStackTrace();
+                        }
+                    }
+                    for(int g = 0; g < buffer.length; g++) {
+                        if(key_len == key.length()){
+                            key_len = 0;
+                        }
+                        buffer[g] = (byte) (buffer[g] + t * symbol[key_len]);
+                        key_len++;
+                    }
+                    finalOut.write(buffer, 0, buffer.length);
+                }
+                if(control) {
+                    buffer = new byte[dop];
+                    error = true;
+                    while(error) {
+                        try {
+                            input[0].read(buffer, 0, buffer.length);
+                            error = false;
+                        } catch (IOException e) {
+                            error = true;
+                            input[0].close();
+                            fd = uri.getFileDescriptor();
+                            input[0] = new FileInputStream(fd);
+                            e.printStackTrace();
+                        }
+                    }
+                    for(int i = 0; i < buffer.length; i++){
+                        if(key_len == key.length()){
+                            key_len = 0;
+                        }
+                        buffer[i] = (byte) (buffer[i] + t * symbol[key_len]);
+                    }
+                    bar.setProgress(100);
+                    finalOut.write(buffer, 0, buffer.length);
+                    input[0].close();
+                    finalOut.close();
+                    relative.setVisibility(View.INVISIBLE);
+                    activ = false;
+                    file = 0;
+                }
+            } catch (IOException e2) {
+                e2.printStackTrace();
             }
-
-            protected void onProgressUpdate(Integer... values) {
-                super.onProgressUpdate(values);
-                bar.setProgress(values[0]);
-            }
-
-            protected void onPreExecute() {
-                super.onPreExecute();
-                relative.setVisibility(View.VISIBLE);
-                activ = true;
-            }
-
-            protected void onPostExecute(Void aVoid) {
-                super.onPostExecute(aVoid);
-                relative.setVisibility(View.INVISIBLE);
-                activ = false;
-                file = 0;
-            }
-        }.execute();
+        });
+        thread.start();
 
     }
 
