@@ -1,13 +1,13 @@
 package com.example.crypt;
 
 import android.Manifest;
-import android.annotation.SuppressLint;
 import android.content.ContentResolver;
 import android.content.Intent;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.ParcelFileDescriptor;
+import android.util.Log;
 import android.view.View;
 import android.webkit.MimeTypeMap;
 import android.widget.EditText;
@@ -24,18 +24,22 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.Date;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
-@RequiresApi(api = Build.VERSION_CODES.O)
 public class Main extends AppCompatActivity {
 
     byte[] buffer;
     String dir = Environment.getExternalStorageDirectory().getAbsolutePath() + "/CRYPT/";
     int file = 0;
     String type;
+    private RandomAccessFile RandomAccessFileout;
 
+    @RequiresApi(api = Build.VERSION_CODES.O)
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -76,7 +80,7 @@ public class Main extends AppCompatActivity {
     protected byte[] symbol;
     boolean activ = false;
 
-    public void execute(View view) {
+    public void execute(View view) throws IOException {
         if(activ){
             Toast.makeText(this, "Дождитесь завершения предыдущего процесса", Toast.LENGTH_SHORT).show();
             return;
@@ -87,11 +91,7 @@ public class Main extends AppCompatActivity {
             if (key.length() > 5) {
                 if (file != 0) {
                     RadioButton check = findViewById(R.id.crypt);
-                    if (check.isChecked()) {
-                        crypt(key.getText().toString());
-                    } else {
-                        decrypt(key.getText().toString());
-                    }
+                    process(key.getText().toString(), check.isChecked());
                 } else {
                     Toast.makeText(this, "Выберите файл", Toast.LENGTH_SHORT).show();
                 }
@@ -102,45 +102,40 @@ public class Main extends AppCompatActivity {
             Toast.makeText(this, "Введите ключ", Toast.LENGTH_SHORT).show();
         }
     }
-
-    protected void crypt(String key) {
-        process(key, true);
-    }
-
-    protected void decrypt(String key) {
-        process(key, false);
-    }
-
-    @SuppressLint("StaticFieldLeak")
-    public void process(String key, boolean crypt) {
+    public void process(String key, boolean crypt) throws IOException {
         View relative = findViewById(R.id.relative);
         ProgressBar bar = findViewById(R.id.progressBar);
         final FileInputStream[] input = {new FileInputStream(fd)};
-        FileOutputStream out = null;
         String file_name = "";
         Date date = new Date();
         file_name += date.getTime();
+        RandomAccessFile out = null;
         if(crypt){
             file_name += "(crypt)";
         }
         else{
             file_name += "(decrypt)";
         }
-        try {
-            out = new FileOutputStream(dir + file_name + "." + type);
-        } catch (FileNotFoundException e) {
-            e.printStackTrace();
+        try{
+            out = new RandomAccessFile(dir + file_name + "." + type, "rw");
         }
-        FileOutputStream finalOut = out;
+        catch (FileNotFoundException ignored){
+        }
         relative.setVisibility(View.VISIBLE);
+        Log.i("length", String.valueOf(input[0].available()));
+        out.setLength(input[0].available());
         activ = true;
-        Thread thread = new Thread(() -> {
+        RandomAccessFile finalOut = out;
+        new Thread(() -> {
             int t = -1;
             if(crypt){
                 t = 1;
             }
             int bit = 1024;
-            int key_len = 0;
+            final int[] key_len = {0};
+            AtomicInteger thread_close = new AtomicInteger();
+            final int[] last = {0}; // последнее значение прогресса
+            final int[] progress = {0};
             symbol = key.getBytes();
             try {
                 int size = input[0].available();
@@ -156,66 +151,98 @@ public class Main extends AppCompatActivity {
                     dop = size;
                 }
                 buffer = new byte[bit];
-                boolean error;
-                for(int i = 0; i < check; i++) {
-                    bar.setProgress((int)((double)i / check * 100));
-                    error = true;
-                    while(error) {
-                        try {
-                            input[0].read(buffer, 0, buffer.length);
-                            error = false;
-                        } catch (IOException e) {
-                            error = true;
-                            input[0].close();
-                            fd = uri.getFileDescriptor();
-                            input[0] = new FileInputStream(fd);
-                            e.printStackTrace();
+                final AtomicBoolean[] error = {new AtomicBoolean(false)};
+                int finalCheck = check;
+                new Thread(()->{
+                    while(true){
+                        progress[0] = thread_close.get() * 100 / finalCheck;
+                        if(last[0] < progress[0]){
+                            last[0] = progress[0];
+                            bar.setProgress(progress[0]);
+                        }
+                        if(progress[0] == 100){
+                            activ = false;
+                            file = 0;
+                            relative.setVisibility(View.INVISIBLE);
+                            break;
                         }
                     }
-                    for(int g = 0; g < buffer.length; g++) {
-                        if(key_len == key.length()){
-                            key_len = 0;
-                        }
-                        buffer[g] = (byte) (buffer[g] + t * symbol[key_len]);
-                        key_len++;
+                }).start();
+                for(int i = 0; i <= check; i++) {
+                    if(i == check && control){
+                        int finalDop = dop;
+                        new Thread(()->{
+                            buffer = new byte[finalDop];
+                            error[0].set(true);
+                            while(error[0].get()) {
+                                try {
+                                    input[0].read(buffer, 0, buffer.length);
+                                    error[0].set(false);
+                                } catch (IOException e) {
+                                    error[0].set(true);
+                                    try {
+                                        input[0].close();
+                                    } catch (IOException ioException) {
+                                        ioException.printStackTrace();
+                                    }
+                                    fd = uri.getFileDescriptor();
+                                    input[0] = new FileInputStream(fd);
+                                    e.printStackTrace();
+                                }
+                            }
+                            for(int g = 0; g < buffer.length; g++){
+                                if(key_len[0] == key.length()){
+                                    key_len[0] = 0;
+                                }
+                                //buffer[g] = (byte) (buffer[g] + t * symbol[key_len[0]]);
+                            }
+                            try {
+                                finalOut.write(buffer, 0, buffer.length);
+                            } catch (IOException e) {
+                                e.printStackTrace();
+                            }
+                            thread_close.set(thread_close.get() + 1);
+                        }).start();
                     }
-                    finalOut.write(buffer, 0, buffer.length);
-                }
-                if(control) {
-                    buffer = new byte[dop];
-                    error = true;
-                    while(error) {
-                        try {
-                            input[0].read(buffer, 0, buffer.length);
-                            error = false;
-                        } catch (IOException e) {
-                            error = true;
-                            input[0].close();
-                            fd = uri.getFileDescriptor();
-                            input[0] = new FileInputStream(fd);
-                            e.printStackTrace();
-                        }
+                    if(i != check) {
+                        new Thread(() -> {
+                            error[0].set(true);
+                            while (error[0].get()) {
+                                try {
+                                    input[0].read(buffer, 0, buffer.length);
+                                    error[0].set(false);
+                                } catch (IOException e) {
+                                    error[0].set(true);
+                                    try {
+                                        input[0].close();
+                                    } catch (IOException ioException) {
+                                        ioException.printStackTrace();
+                                    }
+                                    fd = uri.getFileDescriptor();
+                                    input[0] = new FileInputStream(fd);
+                                    e.printStackTrace();
+                                }
+                            }
+                            for (int g = 0; g < buffer.length; g++) {
+                                if (key_len[0] == key.length()) {
+                                    key_len[0] = 0;
+                                }
+                                //buffer[g] = (byte) (buffer[g] + t * symbol[key_len[0]]);
+                                key_len[0]++;
+                            }
+                            try {
+                                finalOut.write(buffer, 0, buffer.length);
+                            } catch (IOException e) {
+                                e.printStackTrace();
+                            }
+                            thread_close.set(thread_close.get() + 1);
+                        }).start();
                     }
-                    for(int i = 0; i < buffer.length; i++){
-                        if(key_len == key.length()){
-                            key_len = 0;
-                        }
-                        buffer[i] = (byte) (buffer[i] + t * symbol[key_len]);
-                    }
-                    bar.setProgress(100);
-                    finalOut.write(buffer, 0, buffer.length);
-                    input[0].close();
-                    finalOut.close();
-                    relative.setVisibility(View.INVISIBLE);
-                    activ = false;
-                    file = 0;
                 }
             } catch (IOException e2) {
                 e2.printStackTrace();
             }
-        });
-        thread.start();
-
+        }).start();
     }
 
 }
