@@ -22,7 +22,6 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 
 import com.squareup.okhttp.Protocol;
-import com.yandex.authsdk.YandexAuthAccount;
 import com.yandex.authsdk.YandexAuthException;
 import com.yandex.authsdk.YandexAuthLoginOptions;
 import com.yandex.authsdk.YandexAuthOptions;
@@ -32,12 +31,9 @@ import com.yandex.disk.rest.Credentials;
 import com.yandex.disk.rest.OkHttpClientFactory;
 import com.yandex.disk.rest.ResourcesArgs;
 import com.yandex.disk.rest.RestClient;
-import com.yandex.disk.rest.exceptions.NetworkIOException;
 import com.yandex.disk.rest.exceptions.ServerException;
-import com.yandex.disk.rest.exceptions.ServerIOException;
 import com.yandex.disk.rest.json.Resource;
 import com.yandex.disk.rest.json.ResourceList;
-import com.yandex.disk.rest.retrofit.CloudApi;
 
 import java.io.File;
 import java.io.FileDescriptor;
@@ -50,8 +46,6 @@ import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
-
-import retrofit.RestAdapter;
 
 public class Main extends AppCompatActivity {
 
@@ -98,13 +92,18 @@ public class Main extends AppCompatActivity {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == FIND_FILE) {
             try {
-                uri = getContentResolver().openFileDescriptor(data.getData(), "r");
-                fd = uri.getFileDescriptor();//Получение дескриптора файла
-                ContentResolver cR = getContentResolver();
-                MimeTypeMap mime = MimeTypeMap.getSingleton();
-                type = mime.getExtensionFromMimeType(cR.getType(data.getData()));//Получение расширение файла
-                file = 1;
-                tmpFIle = 0;
+                if(data != null){
+                    uri = getContentResolver().openFileDescriptor(data.getData(), "r");
+                    fd = uri.getFileDescriptor();//Получение дескриптора файла
+                    ContentResolver cR = getContentResolver();
+                    MimeTypeMap mime = MimeTypeMap.getSingleton();
+                    type = mime.getExtensionFromMimeType(cR.getType(data.getData()));//Получение расширение файла
+                    file = 1;
+                    tmpFIle = 0;
+                }
+                else{
+                    setContentView(R.layout.main);
+                }
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -296,9 +295,7 @@ public class Main extends AppCompatActivity {
                     RestClient rest = new RestClient(credentials, OkHttpClientFactory.makeClient().setProtocols(Arrays.asList(Protocol.HTTP_1_1)));
                     new Thread(() -> {
                         try {
-                            Log.i("ads", "Загрузка началась");
                             rest.uploadFile(rest.getUploadLink("/CRYPT/" + finalFile_name + "." + type, true), true, new File(finalFullPath), null);
-                            Log.i("ads", "Загрузка завершена");
                         } catch (IOException | ServerException e) {
                             e.printStackTrace();
                         }
